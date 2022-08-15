@@ -24,14 +24,15 @@
 from fileinput import filename
 import sys
 import json
-from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QUrl
+from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QUrl, QVariant
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction, QFileDialog
 from qgis.core import QgsProject, Qgis, QgsNetworkAccessManager, QgsSettings, QgsNetworkRequestParameters
 from qgis.PyQt.QtNetwork import QNetworkRequest
 import requests
 import qgis
-from qgis.core import QgsVectorLayer, QgsFeature, QgsPoint
+from qgis.utils import iface
+from qgis.core import QgsVectorLayer, QgsFeature, QgsPoint, QgsPointXY, QgsGeometry, QgsField
 
 
 # Initialize Qt resources from file resources.py
@@ -216,15 +217,15 @@ class GeopsyCollect:
 
 
     def fetchForms(self):
-        url = "http://127.0.0.1:3000/api/login"
+        url = "https://collect-v2.vercel.app/api/login"
         params = {
             "username": self.username,
             "password": self.password
         }
 
         req = QNetworkRequest(QUrl(url))
-        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "QgsPluginInstaller")
-        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "sendVote")
+        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "Geopsycollectplugin")
+        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "login")
         req.setRawHeader(b"Content-Type", b"application/json")
         self.r = QgsNetworkAccessManager.instance().post(req, bytes(json.dumps(params), "utf-8"))
         self.r.finished.connect(self.handleDone)
@@ -247,9 +248,9 @@ class GeopsyCollect:
                 "username": self.username
             }
 
-            req = QNetworkRequest(QUrl("http://127.0.0.1:3000/api/fetchUserForms"))
-            req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "QgsPluginInstaller")
-            req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "sendVote")
+            req = QNetworkRequest(QUrl("https://collect-v2.vercel.app/api/fetchUserForms"))
+            req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "Geopsycollectplugin")
+            req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "fetchforms")
             req.setRawHeader(b"Content-Type", b"application/json")
             self.reply = QgsNetworkAccessManager.instance().post(req, bytes(json.dumps(params), "utf-8"))
             self.reply.finished.connect(self.handleDone2)
@@ -266,10 +267,6 @@ class GeopsyCollect:
 
         self.dlg.forms.addItems(data)
 
-        self.iface.messageBar().pushMessage(
-            "Sucess", "The forms have been loaded", level=Qgis.Success, duration=60
-        )
-
 
     def cancel(self):
         self.dlg.close()
@@ -278,18 +275,15 @@ class GeopsyCollect:
         selectedFormIndex = self.dlg.forms.currentIndex()
         self.selectedForm = self.formsObj[selectedFormIndex]
         self.selectedFormId = self.selectedForm["form_id"]
-
-        self.iface.messageBar().pushMessage(
-            "Success", "You are viewing "+self.selectedFormId, level=Qgis.Success, duration=20
-        )
+        self.title = self.selectedForm["title"]
 
         params = {
             "form_id": self.selectedFormId
         }
 
-        req = QNetworkRequest(QUrl("http://127.0.0.1:3000/api/getresponse"))
-        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "QgsPluginInstaller")
-        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "sendVote")
+        req = QNetworkRequest(QUrl("https://collect-v2.vercel.app/api/getresponse"))
+        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "Geopsycollectplugin")
+        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "formresponse")
         req.setRawHeader(b"Content-Type", b"application/json")
         self.response = QgsNetworkAccessManager.instance().post(req, bytes(json.dumps(params), "utf-8"))
         self.response.finished.connect(self.handleDone3)
@@ -297,9 +291,6 @@ class GeopsyCollect:
     def handleDone3(self):
         response = self.response.readAll()
         responseAsString = str(response.data(), encoding='utf-8')
-        self.iface.messageBar().pushMessage(
-            "Success", responseAsString, level=Qgis.Success, duration=60
-        )
         res = json.loads(responseAsString)
         resObj = res["response"]
 
@@ -311,16 +302,116 @@ class GeopsyCollect:
             realResponse = data["response"]
             for ress in realResponse:
                 if ress["questionType"] == 'Point':
+                    if ress["response"] == None:
+                        continue
                     pointData.append(ress["response"])
 
                 elif ress["questionType"] == 'Polyline':
+                    if ress["response"] == None:
+                        continue
                     lineData.append(ress["response"])
 
                 elif ress["questionType"] == 'Polygon':
+                    if ress["response"] == None:
+                        continue
                     polygonData.append(ress["response"])
 
                 else:
                     continue
+
+        if len(pointData) > 0:
+            layer = QgsVectorLayer('Point?crs=epsg:4326', self.title, "memory")
+            for item in pointData:
+                if item["altitude"] == None:
+                    continue
+
+                if item["latitude"] == None:
+                    continue  
+
+                if item["longitude"] == None:
+                    continue
+
+                if item["accuracy"] == None:
+                    continue
+
+                pr = layer.dataProvider()
+                pr.addAttributes([QgsField('lat', QVariant.Double)])
+                pr.addAttributes([QgsField('lng', QVariant.Double)])
+                pr.addAttributes([QgsField('alt', QVariant.Double)])
+                pr.addAttributes([QgsField('acc', QVariant.Double)])
+
+                x_index = pr.fieldNameIndex('lat')
+                y_index = pr.fieldNameIndex('lng')
+                z_index = pr.fieldNameIndex('alt')
+                a_index = pr.fieldNameIndex('acc')
+
+                pt = QgsFeature()
+                pt.setAttributes([float(item["latitude"]), float(item["longitude"]), float(item["altitude"]), float(item["accuracy"])   ])
+                #pt.addAttributes([item["latitude"], item["longitude"], item["altitude"], item["accuracy"]])
+                point1 = QgsPointXY(float(item["longitude"]), float(item["latitude"]))
+                pt.setGeometry(QgsGeometry.fromPointXY(point1))
+                pr.addFeatures([pt])
+
+
+            layer.updateExtents()
+            QgsProject.instance().addMapLayers([layer])
+
+
+        if len(lineData) > 0:
+            for line in lineData:
+                polyline_layer = QgsVectorLayer("LineString", self.title, "memory")
+                points = []
+
+                for data in line:
+                    if data["latitude"] == None:
+                        continue
+
+                    if data["longitude"] == None:
+                        continue
+
+                    points.append(QgsPointXY(data["longitude"], data["latitude"]))
+
+
+                if len(points) > 0 :
+                    pr = polyline_layer.dataProvider()
+                    feat = QgsFeature()
+                    feat.setGeometry(QgsGeometry.fromPolylineXY(points))
+                    pr.addFeatures([feat])
+
+                    polyline_layer.updateExtents()
+                    QgsProject.instance().addMapLayers([polyline_layer])
+
+
+        if len(polygonData) > 0:
+            firstItem = polygonData[0]
+            #closing the polygon
+            polygonData.append(firstItem)
+
+            for poly in polygonData:
+                polygon_layer = QgsVectorLayer('Polygon?crs=epsg:4326', self.title, "memory")
+                points = []
+
+                for data in poly:
+                    if data["latitude"] == None:
+                        continue
+
+                    if data["longitude"] == None:
+                        continue
+
+                    points.append(QgsPointXY(data["longitude"], data["latitude"]))
+
+                    if len(points) > 2:
+                        pr = polygon_layer.dataProvider()
+                        feat = QgsFeature()
+                        feat.setGeometry(QgsGeometry.fromPolygonXY([points]))
+                        pr.addFeatures([feat])
+
+                        polygon_layer.updateExtents()
+                        QgsProject.instance().addMapLayers([polygon_layer])
+
+            
+
+        iface.mapCanvas().refresh()
 
 
 
