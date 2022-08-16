@@ -22,15 +22,17 @@
  ***************************************************************************/
 """
 from fileinput import filename
+from random import randint
 import sys
 import json
 from qgis.PyQt.QtCore import QSettings, QTranslator, QCoreApplication, QUrl, QVariant
 from qgis.PyQt.QtGui import QIcon
-from qgis.PyQt.QtWidgets import QAction, QFileDialog
+from qgis.PyQt.QtWidgets import *
 from qgis.core import QgsProject, Qgis, QgsNetworkAccessManager, QgsSettings, QgsNetworkRequestParameters
 from qgis.PyQt.QtNetwork import QNetworkRequest
 import requests
 import qgis
+import uuid
 from qgis.utils import iface
 from qgis.core import QgsVectorLayer, QgsFeature, QgsPoint, QgsPointXY, QgsGeometry, QgsField
 
@@ -41,7 +43,28 @@ from .resources import *
 from .geopsy_collect_dialog import GeopsyCollectDialog
 import os.path
 
+class CreateForm(QWidget):
+    """
+    This window is a QWidget. If it has no parent, it will appear
+    as a free-floating window.
+    """
 
+    def __init__(self) -> None:
+        super().__init__()
+        self.layout = QVBoxLayout()
+        self.setLayout(self.layout)
+
+class NewFormEngine(QWidget):
+    """
+    Implementation of creation of new form.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.engine = QVBoxLayout()
+        self.setLayout(self.engine)
+
+        
 class GeopsyCollect:
     """QGIS Plugin Implementation."""
 
@@ -76,6 +99,15 @@ class GeopsyCollect:
         # Check if plugin was started the first time in current QGIS session
         # Must be set in initGui() to survive plugin reloads
         self.first_start = None
+
+        #storing instances of other windows
+        self.windows = []
+
+        #this command will track if there is any external window
+        self.window = None 
+
+        #tracks if new engine for form creation exists
+        self.formswindow = None
 
     # noinspection PyMethodMayBeStatic
     def tr(self, message):
@@ -243,7 +275,12 @@ class GeopsyCollect:
             return False
 
         else:
-            #jsonData = json.loads(data)
+            jsonData = json.loads(data)
+            x = jsonData["user"]
+            y = x["data"]
+
+            self.user_id = y["_id"]
+
             params = {
                 "username": self.username
             }
@@ -262,10 +299,21 @@ class GeopsyCollect:
         obj = json.loads(formsAsString)
         self.formsObj = obj['forms']
         data = []
-        for form in self.formsObj:
-            data.append(form["title"])
+        if len(self.formsObj) > 0:
+            for form in self.formsObj:
+                if form["title"] == None:
+                    continue
+                else:
+                    data.append(form["title"])
 
         self.dlg.forms.addItems(data)
+
+        self.dlg.line.show()
+        self.dlg.formsLabel.show()
+        self.dlg.forms.show()
+        self.dlg.load.show()
+        self.dlg.cancel.show()
+        self.dlg.create_form.show()
 
 
     def cancel(self):
@@ -322,32 +370,15 @@ class GeopsyCollect:
         if len(pointData) > 0:
             layer = QgsVectorLayer('Point?crs=epsg:4326', self.title, "memory")
             for item in pointData:
-                if item["altitude"] == None:
-                    continue
-
                 if item["latitude"] == None:
                     continue  
 
                 if item["longitude"] == None:
                     continue
 
-                if item["accuracy"] == None:
-                    continue
-
                 pr = layer.dataProvider()
-                pr.addAttributes([QgsField('lat', QVariant.Double)])
-                pr.addAttributes([QgsField('lng', QVariant.Double)])
-                pr.addAttributes([QgsField('alt', QVariant.Double)])
-                pr.addAttributes([QgsField('acc', QVariant.Double)])
-
-                x_index = pr.fieldNameIndex('lat')
-                y_index = pr.fieldNameIndex('lng')
-                z_index = pr.fieldNameIndex('alt')
-                a_index = pr.fieldNameIndex('acc')
 
                 pt = QgsFeature()
-                pt.setAttributes([float(item["latitude"]), float(item["longitude"]), float(item["altitude"]), float(item["accuracy"])   ])
-                #pt.addAttributes([item["latitude"], item["longitude"], item["altitude"], item["accuracy"]])
                 point1 = QgsPointXY(float(item["longitude"]), float(item["latitude"]))
                 pt.setGeometry(QgsGeometry.fromPointXY(point1))
                 pr.addFeatures([pt])
@@ -413,7 +444,546 @@ class GeopsyCollect:
 
         iface.mapCanvas().refresh()
 
+    def newFormEngine(self):
+        self.window = CreateForm()
 
+        self.window.setGeometry(300, 250, 800, 400)
+
+        self.window.setWindowTitle("GeoPsy Collect - Create New Form")
+
+        #self.window.setWindowIcon(QIcon("create_form.png"))
+
+        self.formGroupBox = QGroupBox("Basic Info")
+
+        self.titleLineEdit = QLineEdit()
+
+        self.descLineEdit = QLineEdit()
+
+        self.countryComboBox = QComboBox()
+
+        countries = [
+            {"name": "Afghanistan", "code": "AF"}, 
+            {"name": "land Islands", "code": "AX"}, 
+            {"name": "Albania", "code": "AL"}, 
+            {"name": "Algeria", "code": "DZ"}, 
+            {"name": "American Samoa", "code": "AS"}, 
+            {"name": "AndorrA", "code": "AD"}, 
+            {"name": "Angola", "code": "AO"}, 
+            {"name": "Anguilla", "code": "AI"}, 
+            {"name": "Antarctica", "code": "AQ"}, 
+            {"name": "Antigua and Barbuda", "code": "AG"}, 
+            {"name": "Argentina", "code": "AR"}, 
+            {"name": "Armenia", "code": "AM"}, 
+            {"name": "Aruba", "code": "AW"}, 
+            {"name": "Australia", "code": "AU"}, 
+            {"name": "Austria", "code": "AT"}, 
+            {"name": "Azerbaijan", "code": "AZ"}, 
+            {"name": "Bahamas", "code": "BS"}, 
+            {"name": "Bahrain", "code": "BH"}, 
+            {"name": "Bangladesh", "code": "BD"}, 
+            {"name": "Barbados", "code": "BB"}, 
+            {"name": "Belarus", "code": "BY"}, 
+            {"name": "Belgium", "code": "BE"}, 
+            {"name": "Belize", "code": "BZ"}, 
+            {"name": "Benin", "code": "BJ"}, 
+            {"name": "Bermuda", "code": "BM"}, 
+            {"name": "Bhutan", "code": "BT"}, 
+            {"name": "Bolivia", "code": "BO"}, 
+            {"name": "Bosnia and Herzegovina", "code": "BA"}, 
+            {"name": "Botswana", "code": "BW"}, 
+            {"name": "Bouvet Island", "code": "BV"}, 
+            {"name": "Brazil", "code": "BR"}, 
+            {"name": "British Indian Ocean Territory", "code": "IO"}, 
+            {"name": "Brunei Darussalam", "code": "BN"}, 
+            {"name": "Bulgaria", "code": "BG"}, 
+            {"name": "Burkina Faso", "code": "BF"}, 
+            {"name": "Burundi", "code": "BI"}, 
+            {"name": "Cambodia", "code": "KH"}, 
+            {"name": "Cameroon", "code": "CM"}, 
+            {"name": "Canada", "code": "CA"}, 
+            {"name": "Cape Verde", "code": "CV"}, 
+            {"name": "Cayman Islands", "code": "KY"}, 
+            {"name": "Central African Republic", "code": "CF"}, 
+            {"name": "Chad", "code": "TD"}, 
+            {"name": "Chile", "code": "CL"}, 
+            {"name": "China", "code": "CN"}, 
+            {"name": "Christmas Island", "code": "CX"}, 
+            {"name": "Cocos (Keeling) Islands", "code": "CC"}, 
+            {"name": "Colombia", "code": "CO"}, 
+            {"name": "Comoros", "code": "KM"}, 
+            {"name": "Congo", "code": "CG"}, 
+            {"name": "Congo, The Democratic Republic of the", "code": "CD"}, 
+            {"name": "Cook Islands", "code": "CK"}, 
+            {"name": "Costa Rica", "code": "CR"}, 
+            {"name": "Cote D'Ivoire", "code": "CI"}, 
+            {"name": "Croatia", "code": "HR"}, 
+            {"name": "Cuba", "code": "CU"}, 
+            {"name": "Cyprus", "code": "CY"}, 
+            {"name": "Czech Republic", "code": "CZ"}, 
+            {"name": "Denmark", "code": "DK"}, 
+            {"name": "Djibouti", "code": "DJ"}, 
+            {"name": "Dominica", "code": "DM"}, 
+            {"name": "Dominican Republic", "code": "DO"}, 
+            {"name": "Ecuador", "code": "EC"}, 
+            {"name": "Egypt", "code": "EG"}, 
+            {"name": "El Salvador", "code": "SV"}, 
+            {"name": "Equatorial Guinea", "code": "GQ"}, 
+            {"name": "Eritrea", "code": "ER"}, 
+            {"name": "Estonia", "code": "EE"}, 
+            {"name": "Ethiopia", "code": "ET"}, 
+            {"name": "Falkland Islands (Malvinas)", "code": "FK"}, 
+            {"name": "Faroe Islands", "code": "FO"}, 
+            {"name": "Fiji", "code": "FJ"}, 
+            {"name": "Finland", "code": "FI"}, 
+            {"name": "France", "code": "FR"}, 
+            {"name": "French Guiana", "code": "GF"}, 
+            {"name": "French Polynesia", "code": "PF"}, 
+            {"name": "French Southern Territories", "code": "TF"}, 
+            {"name": "Gabon", "code": "GA"}, 
+            {"name": "Gambia", "code": "GM"}, 
+            {"name": "Georgia", "code": "GE"}, 
+            {"name": "Germany", "code": "DE"}, 
+            {"name": "Ghana", "code": "GH"}, 
+            {"name": "Gibraltar", "code": "GI"}, 
+            {"name": "Greece", "code": "GR"}, 
+            {"name": "Greenland", "code": "GL"}, 
+            {"name": "Grenada", "code": "GD"}, 
+            {"name": "Guadeloupe", "code": "GP"}, 
+            {"name": "Guam", "code": "GU"}, 
+            {"name": "Guatemala", "code": "GT"}, 
+            {"name": "Guernsey", "code": "GG"}, 
+            {"name": "Guinea", "code": "GN"}, 
+            {"name": "Guinea-Bissau", "code": "GW"}, 
+            {"name": "Guyana", "code": "GY"}, 
+            {"name": "Haiti", "code": "HT"}, 
+            {"name": "Heard Island and Mcdonald Islands", "code": "HM"}, 
+            {"name": "Holy See (Vatican City State)", "code": "VA"}, 
+            {"name": "Honduras", "code": "HN"}, 
+            {"name": "Hong Kong", "code": "HK"}, 
+            {"name": "Hungary", "code": "HU"}, 
+            {"name": "Iceland", "code": "IS"}, 
+            {"name": "India", "code": "IN"}, 
+            {"name": "Indonesia", "code": "ID"}, 
+            {"name": "Iran, Islamic Republic Of", "code": "IR"}, 
+            {"name": "Iraq", "code": "IQ"}, 
+            {"name": "Ireland", "code": "IE"}, 
+            {"name": "Isle of Man", "code": "IM"}, 
+            {"name": "Israel", "code": "IL"}, 
+            {"name": "Italy", "code": "IT"}, 
+            {"name": "Jamaica", "code": "JM"}, 
+            {"name": "Japan", "code": "JP"}, 
+            {"name": "Jersey", "code": "JE"}, 
+            {"name": "Jordan", "code": "JO"}, 
+            {"name": "Kazakhstan", "code": "KZ"}, 
+            {"name": "Kenya", "code": "KE"}, 
+            {"name": "Kiribati", "code": "KI"}, 
+            {"name": "Korea, Democratic People'S Republic of", "code": "KP"}, 
+            {"name": "Korea, Republic of", "code": "KR"}, 
+            {"name": "Kuwait", "code": "KW"}, 
+            {"name": "Kyrgyzstan", "code": "KG"}, 
+            {"name": "Lao People'S Democratic Republic", "code": "LA"}, 
+            {"name": "Latvia", "code": "LV"}, 
+            {"name": "Lebanon", "code": "LB"}, 
+            {"name": "Lesotho", "code": "LS"}, 
+            {"name": "Liberia", "code": "LR"}, 
+            {"name": "Libyan Arab Jamahiriya", "code": "LY"}, 
+            {"name": "Liechtenstein", "code": "LI"}, 
+            {"name": "Lithuania", "code": "LT"}, 
+            {"name": "Luxembourg", "code": "LU"}, 
+            {"name": "Macao", "code": "MO"}, 
+            {"name": "Macedonia, The Former Yugoslav Republic of", "code": "MK"}, 
+            {"name": "Madagascar", "code": "MG"}, 
+            {"name": "Malawi", "code": "MW"}, 
+            {"name": "Malaysia", "code": "MY"}, 
+            {"name": "Maldives", "code": "MV"}, 
+            {"name": "Mali", "code": "ML"}, 
+            {"name": "Malta", "code": "MT"}, 
+            {"name": "Marshall Islands", "code": "MH"}, 
+            {"name": "Martinique", "code": "MQ"}, 
+            {"name": "Mauritania", "code": "MR"}, 
+            {"name": "Mauritius", "code": "MU"}, 
+            {"name": "Mayotte", "code": "YT"}, 
+            {"name": "Mexico", "code": "MX"}, 
+            {"name": "Micronesia, Federated States of", "code": "FM"}, 
+            {"name": "Moldova, Republic of", "code": "MD"}, 
+            {"name": "Monaco", "code": "MC"}, 
+            {"name": "Mongolia", "code": "MN"}, 
+            {"name": "Montenegro", "code": "ME"},
+            {"name": "Montserrat", "code": "MS"},
+            {"name": "Morocco", "code": "MA"}, 
+            {"name": "Mozambique", "code": "MZ"}, 
+            {"name": "Myanmar", "code": "MM"}, 
+            {"name": "Namibia", "code": "NA"}, 
+            {"name": "Nauru", "code": "NR"}, 
+            {"name": "Nepal", "code": "NP"}, 
+            {"name": "Netherlands", "code": "NL"}, 
+            {"name": "Netherlands Antilles", "code": "AN"}, 
+            {"name": "New Caledonia", "code": "NC"}, 
+            {"name": "New Zealand", "code": "NZ"}, 
+            {"name": "Nicaragua", "code": "NI"}, 
+            {"name": "Niger", "code": "NE"}, 
+            {"name": "Nigeria", "code": "NG"}, 
+            {"name": "Niue", "code": "NU"}, 
+            {"name": "Norfolk Island", "code": "NF"}, 
+            {"name": "Northern Mariana Islands", "code": "MP"}, 
+            {"name": "Norway", "code": "NO"}, 
+            {"name": "Oman", "code": "OM"}, 
+            {"name": "Pakistan", "code": "PK"}, 
+            {"name": "Palau", "code": "PW"}, 
+            {"name": "Palestinian Territory, Occupied", "code": "PS"}, 
+            {"name": "Panama", "code": "PA"}, 
+            {"name": "Papua New Guinea", "code": "PG"}, 
+            {"name": "Paraguay", "code": "PY"}, 
+            {"name": "Peru", "code": "PE"}, 
+            {"name": "Philippines", "code": "PH"}, 
+            {"name": "Pitcairn", "code": "PN"}, 
+            {"name": "Poland", "code": "PL"}, 
+            {"name": "Portugal", "code": "PT"}, 
+            {"name": "Puerto Rico", "code": "PR"}, 
+            {"name": "Qatar", "code": "QA"}, 
+            {"name": "Reunion", "code": "RE"}, 
+            {"name": "Romania", "code": "RO"}, 
+            {"name": "Russian Federation", "code": "RU"}, 
+            {"name": "RWANDA", "code": "RW"}, 
+            {"name": "Saint Helena", "code": "SH"}, 
+            {"name": "Saint Kitts and Nevis", "code": "KN"}, 
+            {"name": "Saint Lucia", "code": "LC"}, 
+            {"name": "Saint Pierre and Miquelon", "code": "PM"}, 
+            {"name": "Saint Vincent and the Grenadines", "code": "VC"}, 
+            {"name": "Samoa", "code": "WS"}, 
+            {"name": "San Marino", "code": "SM"}, 
+            {"name": "Sao Tome and Principe", "code": "ST"}, 
+            {"name": "Saudi Arabia", "code": "SA"}, 
+            {"name": "Senegal", "code": "SN"}, 
+            {"name": "Serbia", "code": "RS"}, 
+            {"name": "Seychelles", "code": "SC"}, 
+            {"name": "Sierra Leone", "code": "SL"}, 
+            {"name": "Singapore", "code": "SG"}, 
+            {"name": "Slovakia", "code": "SK"}, 
+            {"name": "Slovenia", "code": "SI"}, 
+            {"name": "Solomon Islands", "code": "SB"}, 
+            {"name": "Somalia", "code": "SO"}, 
+            {"name": "South Africa", "code": "ZA"}, 
+            {"name": "South Georgia and the South Sandwich Islands", "code": "GS"}, 
+            {"name": "Spain", "code": "ES"}, 
+            {"name": "Sri Lanka", "code": "LK"}, 
+            {"name": "Sudan", "code": "SD"}, 
+            {"name": "Suriname", "code": "SR"}, 
+            {"name": "Svalbard and Jan Mayen", "code": "SJ"}, 
+            {"name": "Swaziland", "code": "SZ"}, 
+            {"name": "Sweden", "code": "SE"}, 
+            {"name": "Switzerland", "code": "CH"}, 
+            {"name": "Syrian Arab Republic", "code": "SY"}, 
+            {"name": "Taiwan, Province of China", "code": "TW"}, 
+            {"name": "Tajikistan", "code": "TJ"}, 
+            {"name": "Tanzania, United Republic of", "code": "TZ"}, 
+            {"name": "Thailand", "code": "TH"}, 
+            {"name": "Timor-Leste", "code": "TL"}, 
+            {"name": "Togo", "code": "TG"}, 
+            {"name": "Tokelau", "code": "TK"}, 
+            {"name": "Tonga", "code": "TO"}, 
+            {"name": "Trinidad and Tobago", "code": "TT"}, 
+            {"name": "Tunisia", "code": "TN"}, 
+            {"name": "Turkey", "code": "TR"}, 
+            {"name": "Turkmenistan", "code": "TM"}, 
+            {"name": "Turks and Caicos Islands", "code": "TC"}, 
+            {"name": "Tuvalu", "code": "TV"}, 
+            {"name": "Uganda", "code": "UG"}, 
+            {"name": "Ukraine", "code": "UA"}, 
+            {"name": "United Arab Emirates", "code": "AE"}, 
+            {"name": "United Kingdom", "code": "GB"}, 
+            {"name": "United States", "code": "US"}, 
+            {"name": "United States Minor Outlying Islands", "code": "UM"}, 
+            {"name": "Uruguay", "code": "UY"}, 
+            {"name": "Uzbekistan", "code": "UZ"}, 
+            {"name": "Vanuatu", "code": "VU"}, 
+            {"name": "Venezuela", "code": "VE"}, 
+            {"name": "Viet Nam", "code": "VN"}, 
+            {"name": "Virgin Islands, British", "code": "VG"}, 
+            {"name": "Virgin Islands, U.S.", "code": "VI"}, 
+            {"name": "Wallis and Futuna", "code": "WF"}, 
+            {"name": "Western Sahara", "code": "EH"}, 
+            {"name": "Yemen", "code": "YE"}, 
+            {"name": "Zambia", "code": "ZM"}, 
+            {"name": "Zimbabwe", "code": "ZW"} 
+        ]
+
+        countryData = []
+        for country in countries:
+            countryData.append(country["name"])
+
+
+        self.countryComboBox.addItems(countryData)
+
+        self.generateForm()
+
+        self.buttonBox = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+
+        self.buttonBox.accepted.connect(self.getInfo)
+
+        self.buttonBox.rejected.connect(self.reject)
+
+        self.window.layout.addWidget(self.formGroupBox)
+
+        self.window.layout.addWidget(self.buttonBox)
+
+    def getInfo(self):
+        self.title = self.titleLineEdit.text()
+        self.desc = self.descLineEdit.text()
+        self.country = self.countryComboBox.currentText()
+
+        if self.title == '':
+            self.iface.messageBar().pushMessage(
+                "Error", "Form title cannot be empty", level=Qgis.Critical
+            )
+            return False
+
+        if self.formswindow is None:
+            self.formEngine()
+
+        self.windows.append(self.formswindow)
+        self.formswindow.show()
+        self.window.close()
+
+    def formEngine(self):
+        self.formswindow = NewFormEngine()
+
+        self.questionArr = []
+
+        self.formswindow.setGeometry(300, 250, 800, 400)
+
+        self.formswindow.setWindowTitle("GeoPsy Collect - Form Questions")
+
+        self.formsGroupBox = QGroupBox("Question Attributes")
+        self.questionsComboBox = QComboBox()
+        self.questionsComboBox.activated.connect(self.toggleOptions)
+        self.questionsComboBox.addItems(["Short Answer", "Paragraph", "Multiple Choice", "Checkbox", "Dropdown", "File Upload", "Linear Scale", "Date", "Time", "Point", "Polyline", "Polygon"])
+        self.questionLineEdit = QLineEdit()
+        self.questiondescLineEdit = QLineEdit()
+        self.optionsLineEdit = QLineEdit()
+        self.optionsLineEdit.setPlaceholderText("separeted by comma [ , ]")
+        self.optionsLabel = QLabel("Option Values")
+        self.createPushButton = QPushButton("Add Question")
+        self.goBackPushButton = QPushButton("Go Back")
+
+        self.createPushButton.clicked.connect(self.createQuestion)
+
+
+        self.generateEngineForms()
+
+        self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+
+        self.buttons.accepted.connect(self.storeForm)
+
+        self.buttons.rejected.connect(self.clearForms)
+
+        self.formswindow.engine.addWidget(self.formsGroupBox)
+        self.formswindow.engine.addWidget(self.buttons)
+        
+
+    def storeForm(self):
+        body = {
+            "title": self.title,
+            "form_id": str(uuid.uuid4()),
+            "user_id": self.user_id,
+            "description": self.desc,
+            "color": 'teal',
+            "background": '',
+            "headerfont": 'Roboto',
+            "header_image": None,
+            "headersize": 18,
+            "questionfont": 'Roboto',
+            "textfont": 'Roboto',
+            "textsize": 11,
+            "question": self.questionArr,
+            "collect_email_address": False,
+            "allow_response_editing": False,
+            "limit_to_one_response": False,
+            "show_progress_bar": False,
+            "shuffle_question_order": False,
+            "confirmation_message": "Your response has been recorded",
+            "show_link_to_submit_another_response": False
+        }
+
+
+        req = QNetworkRequest(QUrl("https://collect-v2.vercel.app/api/createform"))
+        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "GeopsyCollect")
+        req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "createform")
+        req.setRawHeader(b"Content-Type", b"application/json")
+        self.responsec = QgsNetworkAccessManager.instance().post(req, bytes(json.dumps(body), "utf-8"))
+        self.responsec.finished.connect(self.formcreated)
+
+    def formcreated(self):
+        response = self.responsec.readAll()
+        responseAsString = str(response.data(), encoding='utf-8')
+
+        self.iface.messageBar().pushMessage(
+            "Success", "The form has been created successfully", level=Qgis.Success, duration=60
+        )
+
+        self.formswindow.close()
+
+    def clearForms(self):
+        self.questionArr = []
+
+    def createQuestion(self):
+
+        questionType = self.questionsComboBox.currentText()
+        question = self.questionLineEdit.text()
+        desc = self.questiondescLineEdit.text()
+
+
+        if (questionType == "Multiple Choice") or (questionType == "Checkbox") or (questionType == 'Dropdown'):
+            options = self.optionsLineEdit.text()
+            x = options.split(',')
+            self.optionsValues = []
+            for item in x:
+                chunk =  {"label": item, "id": str(uuid.uuid4())}
+                self.optionsValues.append(chunk)
+
+        else:
+            self.optionsValues = None
+
+
+        pos = len(self.questionArr) + 1
+
+        if desc == "":
+            descBool = False
+
+        else:
+            descBool = True
+
+        # setting the question into a dictionary
+        questionDict = {
+            "id": str(uuid.uuid4()),  
+            "question": {
+                "questionType": questionType,
+                "defaultValue": question,
+                "required": True,
+                "description": descBool,
+                "descriptionValue": desc,
+                "dropdownOptions": self.optionsValues,
+                "responseValidation": False,
+                "responseValidationValue": {},
+                "radioOptions": self.optionsValues,
+                "checkboxOptions": self.optionsValues,
+                "dropdownOptions": self.optionsValues,
+                "uploadSize": '10',
+                "uploadSpecifics": {
+                    "document": False,
+                    "spreadshit": False,
+                    "pdf": False,
+                    "video": False,
+                    "presentation": False,
+                    "drawing": False,
+                    "image": True,
+                    "audio": False
+                },
+                "linearFrom": 0,
+                "linearTo": 5,
+                "linearLabel1": '',
+                "linearLabel2": '',
+                "gridRadioRow": None,
+                "gridRadioColumn": None,
+                "gridCheckboxRow": None,
+                "gridCheckboxColumn": None,
+                "pointSource": 'gps',
+                "pointBackgroundCheck": True,
+                "pointLaskKnownLocation": False,
+                "pointCustomTile": True,
+                "polylineSource": 'gps',
+                "polylineMinPairs": '2',
+                "polylineMaxResponse": '1',
+                "polylineBackgroundCheck": True,
+                "polylineLastKnownLocation": False,
+                "polylineCustomTile": True,
+                "polygonSource": 'gps',
+                "polygonMinPairs": '3',
+                "polygonMaxResponse": '1',
+                "polygonBackgroundCheck": True,
+                "polygonLastKnownLocation": False,
+                "polygonCustomTile": True
+
+                }, 
+                "position": pos, 
+                "linked":False, 
+                "parent":False, 
+                "parentID": None, 
+                "linked_parameters": None, 
+                "linked_question": None, 
+                "linked_position": None, 
+                "type": 1
+        }
+
+        self.questionArr.append(questionDict)
+
+        # reset the input fields
+        self.questionsComboBox.setCurrentText("Short Answer")
+        self.questionLineEdit.setText("")
+        self.questiondescLineEdit.setText("")
+
+        # updating the forms questions count
+        self.updateForms()
+
+    def toggleOptions(self):
+        if self.questionsComboBox.currentText() == 'Multiple Choice':
+            self.optionsLineEdit.show()
+            self.optionsLabel.show()
+
+        elif self.questionsComboBox.currentText() == "Checkbox":
+            self.optionsLineEdit.show()
+            self.optionsLabel.show()
+
+        elif self.questionsComboBox.currentText() == "Dropdown":
+            self.optionsLineEdit.show()
+            self.optionsLabel.show()
+
+        else:
+            self.optionsLineEdit.hide()
+            self.optionsLabel.hide()
+
+    def generateEngineForms(self):
+        self.mlayout = QFormLayout()
+        self.mlayout.addRow(QLabel("Question Type"), self.questionsComboBox)
+
+        self.mlayout.addRow(QLabel("Question"), self.questionLineEdit)
+
+        self.mlayout.addRow(self.optionsLabel, self.optionsLineEdit)
+
+        self.optionsLineEdit.hide()
+        self.optionsLabel.hide()
+
+        self.mlayout.addRow(QLabel("Description(optional)"), self.questiondescLineEdit)
+
+        self.mlayout.addRow(self.createPushButton)
+
+        self.formsGroupBox.setLayout(self.mlayout)
+
+
+    def updateForms(self):
+        item = self.questionArr[len(self.questionArr) - 1]
+        self.mlayout.addRow(QLabel("A question,"+item["id"]+", was added."))
+
+
+    def reject(self):
+        self.window.close()
+
+    def generateForm(self):
+        layout = QFormLayout()
+
+        layout.addRow(QLabel("Form Title"), self.titleLineEdit)
+
+        layout.addRow(QLabel("Description(optional)"), self.descLineEdit)
+
+        layout.addRow(QLabel("Country of Project"), self.countryComboBox)
+
+        self.formGroupBox.setLayout(layout)
+
+    def createForm(self):
+        if self.window is None:
+            self.newFormEngine()
+        self.windows.append(self.window)
+        self.window.show()
 
     def run(self):
         """Run method that performs all the real work"""
@@ -423,9 +993,16 @@ class GeopsyCollect:
         if self.first_start == True:
             self.first_start = False
             self.dlg = GeopsyCollectDialog()
+            self.dlg.line.hide()
+            self.dlg.formsLabel.hide()
+            self.dlg.forms.hide()
+            self.dlg.load.hide()
+            self.dlg.cancel.hide()
+            self.dlg.create_form.hide()
             self.dlg.login.clicked.connect(self.login)
             self.dlg.cancel.clicked.connect(self.cancel)
             self.dlg.load.clicked.connect(self.apply)
+            self.dlg.create_form.clicked.connect(self.createForm)
 
         # show the dialog
         self.dlg.show()

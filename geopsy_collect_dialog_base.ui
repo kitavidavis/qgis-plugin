@@ -65,8 +65,8 @@
   <widget class="QPushButton" name="login">
    <property name="geometry">
     <rect>
-     <x>310</x>
-     <y>150</y>
+     <x>320</x>
+     <y>130</y>
      <width>75</width>
      <height>23</height>
     </rect>
@@ -75,20 +75,7 @@
     <string notr="true"/>
    </property>
    <property name="text">
-    <string>Fetch Forms</string>
-   </property>
-  </widget>
-  <widget class="QCheckBox" name="rememberMe">
-   <property name="geometry">
-    <rect>
-     <x>110</x>
-     <y>110</y>
-     <width>271</width>
-     <height>17</height>
-    </rect>
-   </property>
-   <property name="text">
-    <string>Always remember me in this device</string>
+    <string>Continue</string>
    </property>
   </widget>
   <widget class="QComboBox" name="forms">
@@ -117,20 +104,17 @@
   <widget class="QPushButton" name="load">
    <property name="geometry">
     <rect>
-     <x>220</x>
+     <x>184</x>
      <y>260</y>
-     <width>75</width>
+     <width>111</width>
      <height>23</height>
     </rect>
    </property>
    <property name="styleSheet">
-    <string notr="true">background-color: #04AA6D;
-border: none;
-color: white;
-border-radius: 50%;</string>
+    <string notr="true"/>
    </property>
    <property name="text">
-    <string>Load</string>
+    <string>Load  Form</string>
    </property>
   </widget>
   <widget class="QPushButton" name="cancel">
@@ -144,6 +128,32 @@ border-radius: 50%;</string>
    </property>
    <property name="text">
     <string>Cancel</string>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="create_form">
+   <property name="geometry">
+    <rect>
+     <x>70</x>
+     <y>260</y>
+     <width>101</width>
+     <height>23</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>Create New Form</string>
+   </property>
+  </widget>
+  <widget class="Line" name="line">
+   <property name="geometry">
+    <rect>
+     <x>0</x>
+     <y>180</y>
+     <width>401</width>
+     <height>20</height>
+    </rect>
+   </property>
+   <property name="orientation">
+    <enum>Qt::Horizontal</enum>
    </property>
   </widget>
  </widget>
