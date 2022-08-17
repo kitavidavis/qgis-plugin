@@ -282,10 +282,10 @@ class GeopsyCollect:
             self.user_id = y["_id"]
 
             params = {
-                "username": self.username
+                "user_id": self.user_id
             }
 
-            req = QNetworkRequest(QUrl("https://collect-v2.vercel.app/api/fetchUserForms"))
+            req = QNetworkRequest(QUrl("https://collect-v2.vercel.app/api/getAllUserForms"))
             req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorClass), "Geopsycollectplugin")
             req.setAttribute(QNetworkRequest.Attribute(QgsNetworkRequestParameters.AttributeInitiatorRequestId), "fetchforms")
             req.setRawHeader(b"Content-Type", b"application/json")
