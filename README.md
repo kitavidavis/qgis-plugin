@@ -1,2 +1,2 @@
-#GQIS Plugin for Geopsy collect
+GQIS Plugin for Geopsy collect
 
